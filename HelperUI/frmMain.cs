@@ -23,6 +23,7 @@ namespace HelperUI
         {
             public string[] Keys { get; set; }
             public string Command { get; set; }
+            public string Message { get; set; }
         }
 
         private List<CommandTrigger> lstCommands = new List<CommandTrigger>();
@@ -38,9 +39,19 @@ namespace HelperUI
         private void InitCommands()
         {
             // set game time to mid night
-            this.lstCommands.Add(new CommandTrigger { Keys = new[] { "天黑" }, Command = "/c game.surfaces[1].daytime=0.5" });
+            this.lstCommands.Add(new CommandTrigger
+            {
+                Keys = new[] { "天黑" },
+                Command = "game.surfaces[1].daytime=0.5",
+                Message = "It's midnight",
+            });
             // set game time to mid day
-            this.lstCommands.Add(new CommandTrigger { Keys = new[] { "天亮" }, Command = "/c game.surfaces[1].daytime=0" });
+            this.lstCommands.Add(new CommandTrigger
+            {
+                Keys = new[] { "天亮" },
+                Command = "game.surfaces[1].daytime=0",
+                Message = "It's midday",
+            });
         }
 
         private void B_ReceivedRoomCount(object sender, ReceivedRoomCountArgs e)
@@ -58,7 +69,8 @@ namespace HelperUI
                 {
                     if (cmd.Keys.Any(_ => _ == e.Danmaku.CommentText))
                     {
-                        sr.ServerCommand(cmd.Command);
+                        sr.ServerCommand("/silent-command " + cmd.Command);
+                        if (!string.IsNullOrEmpty(cmd.Message)) sr.ServerCommand(cmd.Message);
                         break;
                     }
                 }
@@ -122,8 +134,7 @@ namespace HelperUI
                         //            }
                         //        }));
                         //    }
-                        logging("收到道具:" + danmakuModel.GiftUser + " 赠送的: " + danmakuModel.GiftName + " x " +
-                                danmakuModel.GiftNum);
+                        logging("收到道具:" + danmakuModel.GiftUser + " 赠送的: " + danmakuModel.GiftName + " x " + danmakuModel.GiftNum);
                         //    Dispatcher.BeginInvoke(new Action(() =>
                         //    {
                         //        if (ShowItem.IsChecked == true)
