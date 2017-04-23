@@ -1,12 +1,16 @@
 ﻿using BilibiliDM_PluginFramework;
 using BiliDMLib;
+using SourceRconLib;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,6 +19,13 @@ namespace HelperUI
     public partial class frmMain : Form
     {
         private readonly DanmakuLoader b = new DanmakuLoader();
+        internal class CommandTrigger
+        {
+            public string[] Keys { get; set; }
+            public string Command { get; set; }
+        }
+
+        private List<CommandTrigger> lstCommands = new List<CommandTrigger>();
 
         public frmMain()
         {
@@ -22,7 +33,14 @@ namespace HelperUI
             b.Disconnected += b_Disconnected;
             b.ReceivedDanmaku += B_ReceivedDanmaku; ;
             b.ReceivedRoomCount += B_ReceivedRoomCount; ;
-
+            this.InitCommands();
+        }
+        private void InitCommands()
+        {
+            // set game time to mid night
+            this.lstCommands.Add(new CommandTrigger { Keys = new[] { "天黑" }, Command = "/c game.surfaces[1].daytime=0.5" });
+            // set game time to mid day
+            this.lstCommands.Add(new CommandTrigger { Keys = new[] { "天亮" }, Command = "/c game.surfaces[1].daytime=0" });
         }
 
         private void B_ReceivedRoomCount(object sender, ReceivedRoomCountArgs e)
@@ -34,6 +52,17 @@ namespace HelperUI
         {
             //logging("received: " + e.Danmaku.);
             ProcDanmaku(e.Danmaku);
+            if (e.Danmaku.MsgType == MsgTypeEnum.Comment)
+            {
+                foreach (var cmd in this.lstCommands)
+                {
+                    if (cmd.Keys.Any(_ => _ == e.Danmaku.CommentText))
+                    {
+                        sr.ServerCommand(cmd.Command);
+                        break;
+                    }
+                }
+            }
         }
         private void ProcDanmaku(DanmakuModel danmakuModel)
         {
@@ -93,8 +122,8 @@ namespace HelperUI
                         //            }
                         //        }));
                         //    }
-                            logging("收到道具:" + danmakuModel.GiftUser + " 赠送的: " + danmakuModel.GiftName + " x " +
-                                    danmakuModel.GiftNum);
+                        logging("收到道具:" + danmakuModel.GiftUser + " 赠送的: " + danmakuModel.GiftName + " x " +
+                                danmakuModel.GiftNum);
                         //    Dispatcher.BeginInvoke(new Action(() =>
                         //    {
                         //        if (ShowItem.IsChecked == true)
@@ -124,7 +153,7 @@ namespace HelperUI
             }
             //if (rawoutput_mode)
             //{
-                logging(danmakuModel.RawData);
+            logging(danmakuModel.RawData);
             //}
         }
 
@@ -164,9 +193,29 @@ namespace HelperUI
             //}
         }
 
+        private void loggingf(string text)
+        {
+            logging(text, Color.Green, true);
+        }
+
+        private void loggingerror(string text)
+        {
+            logging(text, Color.Red, true);
+        }
+
+
         private void logging(string text)
         {
-            this.Invoke((Action)(() => this.rtfStatus.AppendText(text, Color.Blue, true)));
+            logging(text, Color.Blue, true);
+        }
+        private void logging(string text, Color color, bool newline = false)
+        {
+            this.Invoke((Action)(() =>
+            {
+                this.rtfStatus.AppendText(text, color, newline);
+                this.rtfStatus.SelectionStart = this.rtfStatus.Text.Length;
+                this.rtfStatus.ScrollToCaret();
+            }));
         }
 
         private async void Connect(int roomId)
@@ -206,6 +255,109 @@ namespace HelperUI
         private void btnConnect_Click(object sender, EventArgs e)
         {
             Connect(3996224);
+        }
+
+        private void btnStartFactorio_Click(object sender, EventArgs e)
+        {
+            var p = new Process();
+
+            var FactorioExeLocation = @"C:\Program Files (x86)\Steam\steamapps\common\Factorio\bin\x64\";
+            var SaveFileName = @"temp.zip";
+            var SaveLocation = @"C:\Users\icer\AppData\Roaming\Factorio\saves\";
+            var ServerSettingsFileName = @"server-settings.json";
+            var ServerSettingsLocation = @"C:\Program Files (x86)\Steam\steamapps\common\Factorio\data\";
+            var ServerConfigFileName = @"config.ini";
+            var ServerConfigLocation = @"C:\Users\icer\AppData\Roaming\Factorio\serverconfig\";
+
+            var st = new ProcessStartInfo
+            {
+                WorkingDirectory = FactorioExeLocation,
+                FileName = "cmd",
+                Arguments = $"/c factorio.exe --start-server \"{ SaveLocation }{ SaveFileName }\"" +
+                    $" --server-settings \"{ServerSettingsLocation}{ServerSettingsFileName}\"" +
+                    $" -c \"{ServerConfigLocation}{ServerConfigFileName}\"" +
+                    $" --rcon-port 12345 --rcon-password 12345"
+            };
+
+            p.StartInfo = st;
+            p.Start();
+        }
+        Rcon sr;
+        private void btnConnectRCon_Click(object sender, EventArgs e)
+        {
+            IPAddress ip = IPAddress.Parse("127.0.0.1");
+            int port = 12345;
+
+            IPEndPoint ipe = new IPEndPoint(ip, port);
+
+            sr = new Rcon();
+            sr.ConnectionSuccess += new BoolInfo(sr_ConnectionSuccess);
+            sr.ServerOutput += new RconOutput(sr_ServerOutput);
+            sr.Errors += new RconOutput(sr_Errors);
+
+            sr.Connect(ipe, "12345");
+            while (!sr.Connected)
+            {
+                Thread.Sleep(10);
+            }
+            sr.ServerCommand("/p");
+            sr.ServerCommand("/p");
+            //playerBackGround.RunWorkerAsync();
+
+        }
+
+        void sr_ConnectionSuccess(bool info)
+        {
+            if (info)
+            {
+                loggingf("Connected");
+            }
+        }
+        void sr_Errors(MessageCode code, string data)
+        {
+            loggingerror($"ERROR: [{code}]{data}");
+        }
+
+        void sr_ServerOutput(MessageCode code, string data)
+        {
+
+            //if (data.Contains("Players "))
+            //{
+            //    string[] players = data.Split(' ');
+            //    foreach (string i in players)
+            //    {
+            //        loggingf($"player: {i}");
+
+            //    }
+            //}
+            //else 
+            if (data.Contains("Player "))
+            {
+                loggingf("I interuppted your console write");
+            }
+            else
+            {
+                loggingf(data);
+            }
+        }
+
+        private void btnSend_Click(object sender, EventArgs e)
+        {
+            Send();
+        }
+
+        private void Send()
+        {
+            sr.ServerCommand(this.txtCommand.Text);
+        }
+
+        private void txtCommand_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                Send();
+                txtCommand.Text = string.Empty;
+            }
         }
     }
     public static class HelperExtension

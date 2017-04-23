@@ -87,5 +87,11 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SourceRconLib\SourceRconLib.csproj">
+      <Project>{6f184ea5-616c-4a08-aade-4b171f4bbda0}</Project>
+      <Name>SourceRconLib</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
