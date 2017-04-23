@@ -22,6 +22,17 @@ namespace HelperUI
         internal class CommandTrigger
         {
             public string[] Keys { get; set; }
+            public CommandMessage Command { get; set; }
+            public CommandMessage RevertCommand { get; set; }
+            public int RevertDelay { get; set; } // in seconds
+        }
+        internal class CommandMessage
+        {
+            public CommandMessage(string command, string message)
+            {
+                Command = command;
+                Message = message;
+            }
             public string Command { get; set; }
             public string Message { get; set; }
         }
@@ -42,15 +53,21 @@ namespace HelperUI
             this.lstCommands.Add(new CommandTrigger
             {
                 Keys = new[] { "天黑" },
-                Command = "game.surfaces[1].daytime=0.5",
-                Message = "It's midnight",
+                Command = new CommandMessage("game.surfaces[1].daytime=0.5", "It's midnight"),
             });
             // set game time to mid day
             this.lstCommands.Add(new CommandTrigger
             {
                 Keys = new[] { "天亮" },
-                Command = "game.surfaces[1].daytime=0",
-                Message = "It's midday",
+                Command = new CommandMessage("game.surfaces[1].daytime=0", "It's midday"),
+            });
+            // set player to infinite free crafting
+            this.lstCommands.Add(new CommandTrigger
+            {
+                Keys = new[] { "无限" },
+                Command = new CommandMessage("game.players[1].cheat_mode=true", "You are god now."),
+                RevertCommand = new CommandMessage("game.players[1].cheat_mode=false", "Not god anymore."),
+                RevertDelay = 15,
             });
         }
 
@@ -69,13 +86,33 @@ namespace HelperUI
                 {
                     if (cmd.Keys.Any(_ => _ == e.Danmaku.CommentText))
                     {
-                        sr.ServerCommand("/silent-command " + cmd.Command);
-                        if (!string.IsNullOrEmpty(cmd.Message)) sr.ServerCommand(cmd.Message);
+                        this.ExecuteCommand(cmd.Command);
+                        if (cmd.RevertDelay > 0)
+                        {
+                            System.Threading.Timer timer = null;
+                            timer = new System.Threading.Timer(
+                                _ =>
+                                {
+                                    this.Invoke((Action)(() => this.ExecuteCommand(cmd.RevertCommand)));
+                                    Console.WriteLine("time out");
+                                    timer.Dispose();
+                                },
+                                null,
+                                cmd.RevertDelay * 1000,
+                                int.MaxValue);
+                        }
                         break;
                     }
                 }
             }
         }
+        private void ExecuteCommand(CommandMessage cmd)
+        {
+            sr.ServerCommand("/silent-command " + cmd.Command);
+            if (!string.IsNullOrEmpty(cmd.Message)) sr.ServerCommand(cmd.Message);
+
+        }
+
         private void ProcDanmaku(DanmakuModel danmakuModel)
         {
             switch (danmakuModel.MsgType)
